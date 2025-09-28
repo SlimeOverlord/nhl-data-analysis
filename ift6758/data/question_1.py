@@ -1,141 +1,238 @@
-import pandas as pd
-import os
+import asyncio
+import aiohttp
 import json
-import time
-import requests
-import random
+import os
+from typing import Dict, Tuple, Optional, List
+
+import pandas as pd
+
+
+# ---------------------------
+# Public: Scrape player stats
+# ---------------------------
 
 def get_player_stats(year: int, player_type: str) -> pd.DataFrame:
     """
-
-    Uses Pandas' built in HTML parser to scrape the tabular player statistics from
-    https://www.hockey-reference.com/leagues/ . If the player played on multiple 
-    teams in a single season, the individual team's statistics are discarded and
-    the total ('TOT') statistics are retained (the multiple team names are discarded)
-
-    Args:
-        year (int): The first year of the season to retrieve, i.e. for the 2016-17
-            season you'd put in 2016
-        player_type (str): Either 'skaters' for forwards and defensemen, or 'goalies'
-            for goaltenders.
+    Scrape skater/goalie tables from hockey-reference for a given season start year.
+    player_type: 'skaters' or 'goalies'
     """
-
     if player_type not in ["skaters", "goalies"]:
         raise RuntimeError("'player_type' must be either 'skaters' or 'goalies'")
-    
+
     url = f'https://www.hockey-reference.com/leagues/NHL_{year}_{player_type}.html'
-
     print(f"Retrieving data from '{url}'...")
-
-    # Use Pandas' built in HTML parser to retrieve the tabular data from the web data
-    # Uses BeautifulSoup4 in the background to do the heavylifting
     df = pd.read_html(url, header=1)[0]
 
-    # get players which changed teams during a season
-    players_multiple_teams = df[df['Tm'].isin(['TOT'])]
+    # Keep 'TOT' rows for multi-team players
+    players_multiple_teams = df[df['Tm'].eq('TOT')]
 
-    # filter out players who played on multiple teams
+    # Drop per-team rows when a TOT row exists
     df = df[~df['Player'].isin(players_multiple_teams['Player'])]
+
+    # Occasionally extra header rows show up inside the table; remove them
     df = df[df['Player'] != "Player"]
 
-    # add the aggregate rows
-    df = df.append(players_multiple_teams, ignore_index=True)
+    # Concat final set
+    df = pd.concat([df, players_multiple_teams], ignore_index=True)
 
     return df
 
+
+# ---------------------------
+# Async game fetchers (NHL)
+# ---------------------------
+
+def regular_season_game_url(year: int, game_no: int) -> str:
+    four_digit = f"{game_no:04d}"
+    return f"https://api-web.nhle.com/v1/gamecenter/{year}02{four_digit}/play-by-play"
+
+
+def playoff_game_url(year: int, game_tuple: Tuple[int, int, int]) -> str:
+    # (round_no, matchup_no, match_game_no) -> 0R M G
+    r, m, g = game_tuple
+    four_digit = f"0{r}{m}{g}"
+    return f"https://api-web.nhle.com/v1/gamecenter/{year}03{four_digit}/play-by-play"
+
+
+def default_max_games(year: int) -> int:
+    # Conservative caps (update as needed)
+    if year in [2022, 2023, 2024, 2025]:
+        return 1353
+    elif year in [2017, 2018, 2019, 2020]:
+        return 1271
+    return 1230
+
+
 class SeasonData:
-    def __init__(self, year):
+    """
+    Async NHL season downloader with caching and polite concurrency.
+    Writes JSON Lines files:
+      - NHLData/{year}_reg_season.json
+      - NHLData/{year}_playoffs_season.json
+    """
+    def __init__(self, year: int, base_dir: Optional[str] = None):
         self.year = year
+        self.reg_season_data: Dict[str, dict] = {}
+        self.playoffs_data: Dict[str, dict] = {}
 
-        # A python dictionary which contains the JSON data for regular season games, indexed by game IDs
-        self.reg_season_data = {}
+        base_dir = base_dir or os.path.dirname(os.path.abspath(__file__))
+        self.data_dir = os.path.join(base_dir, "NHLData")
+        os.makedirs(self.data_dir, exist_ok=True)
 
-        # A python dictionary which contains the JSON data for playoff games, indexed by game IDs
-        self.playoffs_data = {}
+        self.filename_reg = os.path.join(self.data_dir, f"{self.year}_reg_season.json")
+        self.filename_playoffs = os.path.join(self.data_dir, f"{self.year}_playoffs_season.json")
 
-    def get_data_from_api(self):
-        # Creating the directory to hold all the game data, if it hasn't been already 
-        dataDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "NHLData")
-        os.makedirs(dataDir, exist_ok=True)
+    # ---------- Public API ----------
 
-        # The files that will hold the regular season and playoff game data for the year
-        filename_reg = os.path.join(dataDir, f"{self.year}_reg_season.json")
-        filename_playoffs = os.path.join(dataDir, f"{self.year}_playoffs_season.json")
+    async def get_data_from_api(
+        self,
+        max_concurrency: int = 12,
+        max_games_reg_season: Optional[int] = None,
+        timeout_seconds: float = 10.0,
+        retries: int = 5,
+        backoff_base: float = 0.5,
+    ):
+        """
+        Download regular season and playoffs for the given year.
+        Respects existing cache files; only fetches when missing.
+        """
+        if max_games_reg_season is None:
+            max_games_reg_season = default_max_games(self.year)
 
-        max_games_reg_season = self.get_max_games(self.year)
-        
-        ## Regular season data
-        # First, we check if the data has already been saved somewhere. If yes, we load it directly 
-        if os.path.exists(filename_reg):
-            with open(filename_reg, 'r') as file:
-                for line in file:
-                    game_data = json.loads(line)
-                    self.reg_season_data[f"{game_data["id"]}"] = game_data
-        
-        # If no, we call the api to get the data for each game and save it into a file
-        else:
-            for game_no in range(1, max_games_reg_season + 1):
-                four_digit_game_no = f"{game_no:04d}"
-                url = f"https://api-web.nhle.com/v1/gamecenter/{self.year}02{four_digit_game_no}/play-by-play"
-                
-                api_response = requests.get(url)
+        # Load existing cache if available
+        self._load_existing_cache()
 
-                # If the api finds the game, save it in the dict and write it to the file
-                if api_response.status_code == 200:
-                    api_response_json = api_response.json()
-                    self.reg_season_data[f"{api_response_json["id"]}"] = api_response_json
+        connector = aiohttp.TCPConnector(limit_per_host=max_concurrency, limit=0)  # let semaphore control concurrency
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=timeout_seconds, sock_read=timeout_seconds)
+        headers = {
+            "User-Agent": "nhl-data-grabber/1.0 (contact: you@example.com)",
+            "Accept": "application/json",
+        }
 
-                    with open(filename_reg, 'a') as file:
-                        file.write(json.dumps(api_response_json) + "\n")
+        sem = asyncio.Semaphore(max_concurrency)
 
-                    # Delay the API calls for a little time in order to not tax the API too much (to not get potentially blacklisted)
-                    time.sleep(random.uniform(0.5, 1))
-        
-        ## Playoffs data
-        # First, we check if the data has already been saved somewhere. If yes, we load it directly
-        if os.path.exists(filename_playoffs):
-            with open(filename_playoffs, 'r') as file:
-                for line in file:
-                    game_data = json.loads(line)
-                    self.playoffs_data[f"{game_data["id"]}"] = game_data
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
+            # --- Regular Season ---
+            if not os.path.exists(self.filename_reg):
+                print(f"Fetching regular season {self.year} ({max_games_reg_season} games) ...")
+                reg_results = await self._fetch_regular_season(
+                    session, sem, max_games_reg_season, retries, backoff_base
+                )
+                if reg_results:
+                    self._write_jsonl(self.filename_reg, reg_results)
 
-        # If no, we call the api to get the data for each game and save it into a file
-        else:
-            # We have 8 matchups in round 1, 4 matchups in round 2, 2 matchups in the semifinals and 1 matchup in the finals
-            round_and_matchup = [(1, 8),(2, 4),(3, 2),(4, 1)]
+            # --- Playoffs ---
+            if not os.path.exists(self.filename_playoffs):
+                print(f"Fetching playoffs {self.year} ...")
+                playoffs_results = await self._fetch_playoffs(session, sem, retries, backoff_base)
+                if playoffs_results:
+                    self._write_jsonl(self.filename_playoffs, playoffs_results)
 
-            for round_no, max_matchup in round_and_matchup:
-                for matchup_no in range(1, max_matchup + 1):
-                    # There are 7 games maximum per matchup
-                    for game_no in range(1, 8):
-                        four_digit_game_no = f"0{round_no}{matchup_no}{game_no}"
-                        url = f"https://api-web.nhle.com/v1/gamecenter/{self.year}03{four_digit_game_no}/play-by-play"
-                        api_response = requests.get(url)
+        print("Done.")
 
-                        # If the api finds the game, save it in the dict and write it to the file
-                        if api_response.status_code == 200:
-                            api_response_json = api_response.json()
-                            self.playoffs_data[f"{api_response_json["id"]}"] = api_response_json
-                            with open(filename_playoffs, 'a') as file:
-                                file.write(json.dumps(api_response_json) + "\n")
+    # ---------- Internal helpers ----------
 
-                            # Delay the API calls for a little time in order to not tax the API too much (to not get potentially blacklisted)
-                            time.sleep(random.uniform(0.5, 1))
+    def _load_existing_cache(self):
+        def load_file(path: str) -> Dict[str, dict]:
+            out: Dict[str, dict] = {}
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    for line in f:
+                        try:
+                            g = json.loads(line)
+                            out[str(g["id"])] = g
+                        except Exception:
+                            continue
+            return out
 
-                        # If not, then the previous game was the last of the matchup, so we stop there    
-                        else:
-                            break
+        self.reg_season_data.update(load_file(self.filename_reg))
+        self.playoffs_data.update(load_file(self.filename_playoffs))
 
-    def get_max_games(self, year):
-        if year in [2022, 2023, 2024, 2025]:
-            return 1353
-        elif year in [2017, 2018, 2019, 2020]:
-            return 1271
-        else:
-            return 1230        
-    
-    ## For playoffs:
-    #  -the first digit goes from 1 to 4 because there are 4 rounds (first, second, semifinal, final)
-    #  -the second digit goes from 1 to 8 when the first digit is 1 (8 matchups in round 1), from 1 to 4 when the second digit is 2 (4 matchups in round 2), from 1 to 2
-    #  when the first digit is 3 (2 matchups in semifinals) and can only be 1 when the first digit is 4 (only 1 matchup in final) 
-    #  -the last digit only goes from 1 to 7 because 7 matches maximum are played to determine the winner of the round. Sometimes, less than 7 matches are played
+    @staticmethod
+    def _write_jsonl(path: str, items: List[dict]):
+        with open(path, "w") as f:
+            for it in items:
+                f.write(json.dumps(it) + "\n")
+
+    async def _bounded_fetch_json(
+        self,
+        session: aiohttp.ClientSession,
+        sem: asyncio.Semaphore,
+        url: str,
+        retries: int,
+        backoff_base: float,
+    ) -> Optional[dict]:
+        """
+        GET with retries + exponential backoff + jitter.
+        Returns parsed JSON (dict) or None.
+        """
+        async with sem:
+            delay = backoff_base
+            for attempt in range(retries):
+                try:
+                    async with session.get(url) as resp:
+                        if resp.status == 200:
+                            return await resp.json()
+                        # Retry on 429/5xx
+                        if resp.status in (429, 500, 502, 503, 504):
+                            await asyncio.sleep(delay)
+                            delay = min(delay * 2, 8.0)  # cap backoff
+                            continue
+                        # Non-retryable statuses
+                        return None
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 8.0)
+            return None
+
+    async def _fetch_regular_season(
+        self,
+        session: aiohttp.ClientSession,
+        sem: asyncio.Semaphore,
+        max_games: int,
+        retries: int,
+        backoff_base: float,
+    ) -> List[dict]:
+        tasks = []
+        for n in range(1, max_games + 1):
+            url = regular_season_game_url(self.year, n)
+            tasks.append(self._bounded_fetch_json(session, sem, url, retries, backoff_base))
+
+        results: List[dict] = []
+        for coro in asyncio.as_completed(tasks):
+            game = await coro
+            if game:
+                gid = str(game.get("id", ""))
+                if gid and gid not in self.reg_season_data:
+                    self.reg_season_data[gid] = game
+                    results.append(game)
+        print(f"  Saved {len(results)} new regular-season games.")
+        return results
+
+    async def _fetch_playoffs(
+        self,
+        session: aiohttp.ClientSession,
+        sem: asyncio.Semaphore,
+        retries: int,
+        backoff_base: float,
+    ) -> List[dict]:
+        # NHL playoff structure per season: Rounds: (round_no, number_of_matchups)
+        round_and_matchup = [(1, 8), (2, 4), (3, 2), (4, 1)]
+
+        tasks = []
+        for r, max_m in round_and_matchup:
+            for m in range(1, max_m + 1):
+                for g in range(1, 8):  # up to 7 games per series
+                    url = playoff_game_url(self.year, (r, m, g))
+                    tasks.append(self._bounded_fetch_json(session, sem, url, retries, backoff_base))
+
+        results: List[dict] = []
+        for coro in asyncio.as_completed(tasks):
+            game = await coro
+            if game:
+                gid = str(game.get("id", ""))
+                if gid and gid not in self.playoffs_data:
+                    self.playoffs_data[gid] = game
+                    results.append(game)
+        print(f"  Saved {len(results)} new playoff games.")
+        return results
