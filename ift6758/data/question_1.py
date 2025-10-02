@@ -133,9 +133,3 @@ class SeasonData:
             return 1271
         else:
             return 1230        
-    
-    ## For playoffs:
-    #  -the first digit goes from 1 to 4 because there are 4 rounds (first, second, semifinal, final)
-    #  -the second digit goes from 1 to 8 when the first digit is 1 (8 matchups in round 1), from 1 to 4 when the second digit is 2 (4 matchups in round 2), from 1 to 2
-    #  when the first digit is 3 (2 matchups in semifinals) and can only be 1 when the first digit is 4 (only 1 matchup in final) 
-    #  -the last digit only goes from 1 to 7 because 7 matches maximum are played to determine the winner of the round. Sometimes, less than 7 matches are played
