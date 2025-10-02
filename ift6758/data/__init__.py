@@ -11,4 +11,5 @@ instead of only:
 but both are still valid. You can read more about packages and modules here:
 https://docs.python.org/3/reference/import.html#regular-packages
 """
-from .question_1 import get_player_stats
+from .data_fetching import SeasonData
+from .data_cleaning import clean_season_data, clean_play_by_play_data, get_additional_features
