@@ -30,7 +30,6 @@ def load_season_data(start_year: int, end_year: int) -> Dict[int, pd.DataFrame]:
         season = SeasonData(year)
         season.get_data_from_api()
         seasons_df[year] = get_additional_features(clean_season_data(season))
-    
     return seasons_df
 
 
@@ -100,7 +99,9 @@ def calculate_heatmaps(seasons_df: Dict[int, pd.DataFrame], all_teams: List[str]
         
         # Calculate overall distribution for this year (normalized by number of games)
         hist_all, _, _ = calculate_shot_density(df, x_range, y_range, bins)
-        smooth_all = gaussian_filter(hist_all, sigma=1)
+        # we divide by 2 because for one match there is two teams
+        hist_all /= 2
+        smooth_all = gaussian_filter(hist_all, sigma=3)
         
         # Calculate distribution for each team
         for team in all_teams:
@@ -108,14 +109,14 @@ def calculate_heatmaps(seasons_df: Dict[int, pd.DataFrame], all_teams: List[str]
             
             if len(filtered_df) > 0:
                 hist_team, _, _ = calculate_shot_density(filtered_df, x_range, y_range, bins)
-                smooth_team = gaussian_filter(hist_team, sigma=1)
+                smooth_team = gaussian_filter(hist_team, sigma=3)
                 
                 # Store the differential heatmap data
                 heatmap_data_by_year_team[year][team] = smooth_team.T - smooth_all.T
             else:
                 # If no data for this team, store empty array
                 heatmap_data_by_year_team[year][team] = np.zeros((84, 200))
-    
+
     return heatmap_data_by_year_team
 
 
@@ -375,6 +376,7 @@ def main():
     # Display figure
     print("Displaying figure...")
     fig.show()
+    # fig.write_html("figs.html")
 
 
 if __name__ == "__main__":
