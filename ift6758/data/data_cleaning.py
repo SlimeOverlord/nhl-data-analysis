@@ -117,7 +117,7 @@ def get_starting_sides (event: Dict, home_team_id: int, away_team_id: int) -> Tu
     # Checking which side each team defends at the start of the game
     home_team_defends = ""
 
-    # For seasons 2019 and onwards, the first element of plays has the side the home team is defending
+    # For seasons 2019 and onwards, the first element of plays almost always has the side the home team is defending
     period_start_play = event[0]
     if "homeTeamDefendingSide" in period_start_play:
         home_team_defends = period_start_play["homeTeamDefendingSide"]
@@ -125,6 +125,12 @@ def get_starting_sides (event: Dict, home_team_id: int, away_team_id: int) -> Tu
     # For seasons before 2019, we loop through the shots on goal to find one that gives us enough information to determine each side
     else:
         for play in event:
+
+            # This corrects a rare case for seasons 2019 and onwards where the first element is not the period start
+            if "homeTeamDefendingSide" in play:
+                home_team_defends = play["homeTeamDefendingSide"]
+                break
+
             event_type = play.get('typeDescKey', '').lower()
             if event_type not in ['shot-on-goal', 'goal']:
                 continue
@@ -149,7 +155,7 @@ def get_starting_sides (event: Dict, home_team_id: int, away_team_id: int) -> Tu
                         elif team_id == away_team_id:
                             home_team_defends = "right"
                             break
-    
+
     if home_team_defends == "left":
         return (home_team_id, away_team_id)
     elif home_team_defends == "right":
@@ -307,3 +313,23 @@ def get_additional_features(df: pd.DataFrame) -> pd.DataFrame:
     df['is_overtime'] = df['period'] > 3
 
     return df
+
+def feature_engineering_1(df: pd.DataFrame) -> pd.DataFrame:
+    new_features_df = pd.DataFrame()
+
+    # To calculate the distances and angles, we will use the standardized coordinates, so the net is always on the right
+    # Compute the euclidean distance between the position of the shot and the position of the goal for each shot
+    new_features_df["distance_from_goal"] = np.sqrt((df['standardized_x_coord'] - 89)**2 + df['standardized_y_coord']**2)
+
+    # Compute the angle between the net and the standardized position of the player
+    new_features_df["angle_from_goal"] = np.degrees(np.arctan2(np.abs(df['standardized_y_coord']), 89 - df['standardized_x_coord']))
+
+    new_features_df["is_goal"] = df["event_type"].apply(lambda x: 1 if x == "Goal" else 0)
+
+    new_features_df["is_empty_net"] = df["empty_net"].apply(lambda x: 1 if x == True else 0)
+
+    return new_features_df
+
+
+
+
