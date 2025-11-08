@@ -243,8 +243,8 @@ for name, features in feature_sets.items():
     # Finish the current W&B run to flush data and allow a new run next loop
     wandb.finish()
 
-# Create figures directory if it doesn't exist
-figures_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "figures")
+# Ensure a local `figures/` directory exists to save the figures shown with plt.show()
+figures_dir = os.path.join(os.getcwd(), "figures")
 os.makedirs(figures_dir, exist_ok=True)
 
 # Aleatory baseline
@@ -270,6 +270,12 @@ plt.ylabel("True Positive Rate")
 plt.title("ROC Curves — Logistic Regression Models")
 plt.legend()
 plt.grid(True)
+
+# Save global ROC figure
+roc_path = os.path.join(figures_dir, "roc_curves.png")
+fig_roc.savefig(roc_path, bbox_inches="tight")
+print(f"Saved global ROC figure to: {roc_path}")
+
 plt.show()
 plt.close(fig_roc)
 
@@ -304,6 +310,13 @@ plt.ylim(0, 100)
 plt.grid(True)
 plt.gca().invert_xaxis()   
 plt.legend()
+
+# Save the global goal-rate figure
+fig_goal_global = plt.gcf()
+goal_path = os.path.join(figures_dir, "goal_rate_vs_percentile.png")
+fig_goal_global.savefig(goal_path, bbox_inches="tight")
+print(f"Saved goal-rate figure to: {goal_path}")
+
 plt.show()
 
 
@@ -332,10 +345,6 @@ plt.ylabel("Cumulative proportion of goals [%]")
 plt.title("Cumulative % of Goals (Validation Set)")
 plt.grid(True)
 plt.legend()
-# Create figures directory if it doesn't exist
-figures_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "figures")
-os.makedirs(figures_dir, exist_ok=True)
-
 # Save cumulative goals figure
 cum_path = os.path.join(figures_dir, "cumulative_goals.png")
 plt.savefig(cum_path, bbox_inches="tight")
