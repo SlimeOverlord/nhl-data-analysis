@@ -3,7 +3,7 @@ import pandas as pd
 
 def load_training_and_test_sets():
     """
-    Loads the training and test CSV files generated previously in feature_engineering_1.ipynb.
+    Loads the training and test CSV files generated previously in get_train_and_test_sets_demo.ipynb.
     Automatically detects the project root (folder 'nhl-data-analysis'),
     so it works regardless of where you run the script from. This addresses the issue of relative paths
     when running .py or .ipynb scripts from different directories.
