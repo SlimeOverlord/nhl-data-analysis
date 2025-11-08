@@ -184,26 +184,45 @@ def clean_play_by_play_data(game_data: Dict) -> pd.DataFrame:
 
     start_defend_left_team, start_defend_right_team = get_starting_sides(plays, home_team_id, away_team_id)
 
+    prev_play_info = {
+        "event_type": None,
+        "period_time": None,
+        "x_coordinate": None,
+        "y_coordinate": None,
+        "standardized_x_coordinate": None,
+        "standardized_y_coordinate": None
+    }
+
     for play in plays:
         event_type = play.get('typeDescKey', '').lower()
-
-        if event_type not in ['shot-on-goal', 'goal', 'shot', 'missed-shot']:
-            continue
-
-        # skip missed and blocked shots for now
-        if event_type == 'missed-shot' or play.get('result', {}).get('event') == 'Blocked Shot':
-            continue
-
-        period_info = play.get('periodDescriptor', {})
-        period = period_info.get('number', 0)
         period_time = play.get('timeInPeriod', '00:00')
-
+        period_info = play.get('periodDescriptor', {})  
+        period = period_info.get('number', 0)
         team_id = play.get('details', {}).get('eventOwnerTeamId')
-        team_abbrev = None
-
         x, y = get_coordinates(play)
-
         standardized_x, standardized_y = standardize_coordinates(x, y, period, team_id, start_defend_left_team, start_defend_right_team)
+
+        # If the event isn't a shot, simply store its relevant information
+        if event_type not in ['shot-on-goal', 'goal', 'shot', 'missed-shot']:
+            prev_play_info["event_type"] = event_type
+            prev_play_info["period_time"] = period_time
+            prev_play_info["x_coordinate"] = x
+            prev_play_info["y_coordinate"] = y
+            prev_play_info["standardized_x_coordinate"] = standardized_x
+            prev_play_info["standardized_y_coordinate"] = standardized_y
+            continue
+
+        # For now, ignore missed and blocked shots
+        if event_type == 'missed-shot' or play.get('result', {}).get('event') == 'Blocked Shot':
+            prev_play_info["event_type"] = event_type
+            prev_play_info["period_time"] = period_time
+            prev_play_info["x_coordinate"] = x
+            prev_play_info["y_coordinate"] = y
+            prev_play_info["standardized_x_coordinate"] = standardized_x
+            prev_play_info["standardized_y_coordinate"] = standardized_y
+            continue
+    
+        team_abbrev = None
 
         if 'team' in play:
             team_abbrev = play['team'].get('triCode')
@@ -238,15 +257,28 @@ def clean_play_by_play_data(game_data: Dict) -> pd.DataFrame:
             'goalie': goalie_name,
             'shot_type': shot_type,
             'empty_net': empty_net,
-            'strength': strength
+            'strength': strength,
+            'prev_play_event_type': prev_play_info["event_type"],
+            'prev_play_period_time': prev_play_info["period_time"],
+            'prev_play_x_coord': prev_play_info["x_coordinate"],
+            'prev_play_y_coord': prev_play_info["y_coordinate"],
+            'prev_play_standardized_x_coord': prev_play_info["standardized_x_coordinate"],
+            'prev_play_standardized_y_coord': prev_play_info["standardized_y_coordinate"]
         }
 
         events.append(event_record)
 
+        # Store the relevant information about the event for the next iteration
+        prev_play_info["event_type"] = 'Goal' if is_goal else 'Shot'
+        prev_play_info["period_time"] = period_time
+        prev_play_info["x_coordinate"] = x
+        prev_play_info["y_coordinate"] = y
+        prev_play_info["standardized_x_coordinate"] = standardized_x
+        prev_play_info["standardized_y_coordinate"] = standardized_y
+
     df = pd.DataFrame(events)
 
     return df
-
 
 def clean_season_data(season_data_obj) -> pd.DataFrame:
     """
@@ -283,7 +315,9 @@ def clean_season_data(season_data_obj) -> pd.DataFrame:
             'game_id', 'period', 'period_time', 'team', 'event_type',
             'x_coord', 'y_coord', 'standardized_x_coord', 'standardized_y_coord',
             'shooter', 'goalie', 'shot_type',
-            'empty_net', 'strength', 'season', 'game_type'
+            'empty_net', 'strength', 'season', 'game_type', 'prev_play_event_type',
+            'prev_play_period_time', 'prev_play_x_coord', 'prev_play_y_coord', 'prev_play_standardized_x_coord',
+            'prev_play_standardized_y_coord'
         ])
 
 
@@ -327,6 +361,81 @@ def feature_engineering_1(df: pd.DataFrame) -> pd.DataFrame:
     new_features_df["is_goal"] = df["event_type"].apply(lambda x: 1 if x == "Goal" else 0)
 
     new_features_df["is_empty_net"] = df["empty_net"].apply(lambda x: 1 if x == True else 0)
+
+    return new_features_df
+
+def feature_engineering_2(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    new_features_df = pd.DataFrame()
+
+    # Finding the game time of the event (since the start of the game)
+    def time_to_seconds(row):
+        time_str = row["period_time"]
+        period = row["period"]
+        if pd.isna(time_str):
+            return 0
+        try:
+            parts = str(time_str).split(':')
+            if len(parts) == 2:
+                return (period - 1) * 1200 + (int(parts[0]) * 60 + int(parts[1]))
+        except:
+            return 0
+
+    # Finding the game time of the previous events (since the start of the game)    
+    def prev_time_to_seconds(row):
+        time_str = row["prev_play_period_time"]
+        period = row["period"]
+        if pd.isna(time_str):
+            return 0
+        try:
+            parts = str(time_str).split(':')
+            if len(parts) == 2:
+                return (period - 1) * 1200 + (int(parts[0]) * 60 + int(parts[1]))
+        except:
+            return 0
+        
+    def calculate_angle_change(row):
+        is_rebound = row["is_rebound"]
+        standardized_x_coord = row["standardized_x_coord"]
+        standardized_y_coord = row["standardized_y_coord"]
+        prev_standardized_x_coord = row["prev_play_standardized_x_coord"]
+        prev_standardized_y_coord = row["prev_play_standardized_y_coord"]
+
+        if is_rebound:
+            angle_with_net = np.degrees(np.arctan2(np.abs(standardized_y_coord), 89 - standardized_x_coord))
+            prev_angle_with_net = np.degrees(np.arctan2(np.abs(prev_standardized_y_coord), 89 - prev_standardized_x_coord))
+
+            return np.abs(angle_with_net - prev_angle_with_net)
+
+        else:
+            return 0.0
+
+    # Adding the first set of features to the new dataframe
+    new_features_df["game_seconds"] = df.apply(time_to_seconds, axis=1)
+    new_features_df["period"] = df["period"]
+    new_features_df["x_coord"] = df["x_coord"]
+    new_features_df["y_coord"] = df["y_coord"]
+    new_features_df["distance_from_goal"] = np.sqrt((df['standardized_x_coord'] - 89)**2 + df['standardized_y_coord']**2)
+
+    new_features_df["angle_from_goal"] = np.degrees(np.arctan2(np.abs(df['standardized_y_coord']), 89 - df['standardized_x_coord']))
+
+    new_features_df["shot_type"] = df["shot_type"]
+
+    # Adding the set of features concerning the previous events to the new dataframe
+    new_features_df["prev_event_type"] = df["prev_play_event_type"]
+    new_features_df["prev_x_coord"] = df["prev_play_x_coord"]
+    new_features_df["prev_y_coord"] = df["prev_play_y_coord"]
+    new_features_df["time_since_prev_event"] = np.abs(new_features_df["game_seconds"] - df.apply(prev_time_to_seconds, axis=1))
+    new_features_df["distance_from_prev_event"] = np.sqrt((df["x_coord"] - df["prev_play_x_coord"])**2 + (df['y_coord'] - df["prev_play_y_coord"])**2)
+
+    # Finally, adding the 3 new features
+    new_features_df["is_rebound"] = df["prev_play_event_type"].apply(lambda x: True if x == "Shot" else False)
+    df["is_rebound"] = df["prev_play_event_type"].apply(lambda x: True if x == "Shot" else False)
+    new_features_df["angle_change"] = df.apply(calculate_angle_change, axis=1)
+    new_features_df["speed"] = new_features_df["distance_from_prev_event"]/new_features_df["time_since_prev_event"]
+
+    # Including also the outcome of the shot as the target label
+    new_features_df["is_goal"] = df["event_type"].apply(lambda x: 1 if x == "Goal" else 0)
 
     return new_features_df
 
