@@ -319,8 +319,6 @@ print(f"Saved goal-rate figure to: {goal_path}")
 
 plt.show()
 
-
-
 # 6. Cumulative Goals
 plt.figure(figsize=(7,5))
 for name, data in results.items():
