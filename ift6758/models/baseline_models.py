@@ -65,23 +65,6 @@ colors = {
 # 3. Train the three models and save predictions in `results`
 results = {}
 
-"""
-for name, features in feature_sets.items():
-    X = df[features]
-
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
-
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
-
-    clf = LogisticRegression(max_iter=1000)
-    clf.fit(X_train_scaled, y_train)
-    y_proba = clf.predict_proba(X_val_scaled)[:, 1]
-    results[name] = {"y_proba": y_proba, "clf": clf}"""
-
 for name, features in feature_sets.items():
     # Select the columns for this feature set
     X = df[features]
@@ -111,7 +94,7 @@ for name, features in feature_sets.items():
         reinit=True  # allow multiple runs in a single script/process
     )
 
-    # --- Train the logistic regression model ---
+    # Train the logistic regression model 
     clf = LogisticRegression(max_iter=1000)
     clf.fit(X_train_scaled, y_train)
 
@@ -119,7 +102,7 @@ for name, features in feature_sets.items():
     y_proba = clf.predict_proba(X_val_scaled)[:, 1]
     results[name] = {"y_proba": y_proba, "clf": clf}
 
-    # --- Compute validation metrics ---
+    # Compute validation metrics 
     auc = roc_auc_score(y_val, y_proba)
     accuracy = accuracy_score(y_val, (y_proba > 0.5).astype(int))
 
@@ -137,7 +120,7 @@ for name, features in feature_sets.items():
         "feature_set": name
     })
 
-    # --- Create and log per-run diagnostic figures to W&B ---
+    # Create and log per-run diagnostic figures to W&B 
     # We log these here (while 'run' is active) so each model's run
     # stores its own ROC, calibration, goal-rate and cumulative plots.
     # 1) ROC curve (single-run)
@@ -201,7 +184,7 @@ for name, features in feature_sets.items():
     run.log({f"cumulative_plot_{name}": wandb.Image(fig_cum)})
     plt.close(fig_cum)
 
-    # --- Save validation predictions to CSV and upload as an artifact ---
+    # Save validation predictions to CSV and upload as an artifact
     val_results = pd.DataFrame({
         "y_true": y_val,
         "y_proba": y_proba,
@@ -218,7 +201,7 @@ for name, features in feature_sets.items():
     dataset_artifact.add_file(val_csv)
     run.log_artifact(dataset_artifact)
 
-    # --- Save model (joblib) and upload as a model artifact ---
+    # Save model (joblib) and upload as a model artifact
     model_filename = f"{name}_model.pkl"
     joblib.dump(clf, model_filename)
 
@@ -237,7 +220,7 @@ for name, features in feature_sets.items():
     model_artifact.add_file(model_filename)
     run.log_artifact(model_artifact)
 
-    # Print the run URL (convenient to paste into the blog)
+    # Print the run URL to easily find it later
     print(f"\nModel {name} - Wandb run URL:", run.get_url())
 
     # Finish the current W&B run to flush data and allow a new run next loop
@@ -302,7 +285,6 @@ for name, data in results.items():
              color=colors.get(name, "gray"),
              label=name)
 
-# Ejes y formato igual que antes
 plt.title("Goal Rate vs Shot Probability Model Percentile (Validation Set)")
 plt.xlabel("Shot Probability Model Percentile")
 plt.ylabel("Goals / (Shots + Goals) [%]")
@@ -338,7 +320,7 @@ for name, data in results.items():
 
 plt.gca().invert_xaxis()
 plt.plot([100,0],[0,100],'--',color='gray',label="random baseline")
-plt.xlabel("Shot Probability Model Percentile (100 → 0)")
+plt.xlabel("Shot Probability Model Percentile")
 plt.ylabel("Cumulative proportion of goals [%]")
 plt.title("Cumulative % of Goals (Validation Set)")
 plt.grid(True)

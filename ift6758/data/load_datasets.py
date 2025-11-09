@@ -30,3 +30,24 @@ def load_training_and_test_sets():
     test_df = pd.read_csv(test_path)
 
     return train_df, test_df
+
+def load_feature_engineered2_training_and_test_sets():
+    """
+    Loads the feature-engineered2 training and test CSV files.
+    """
+    current_path = os.path.abspath(__file__)
+    project_root = current_path.split("ift6758")[0] + "ift6758"
+
+    data_dir = os.path.join(project_root, "data", "NHLData")
+    train_path = os.path.join(data_dir, "feature_engineered_training_set_2.csv")
+    test_path = os.path.join(data_dir, "feature_engineered_test_set_2.csv")
+
+    if not os.path.exists(train_path):
+        raise FileNotFoundError(f"Feature-engineered training set file not found: {train_path}")
+    if not os.path.exists(test_path):
+        raise FileNotFoundError(f"Feature-engineered test set file not found: {test_path}")
+
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
+
+    return train_df, test_df
