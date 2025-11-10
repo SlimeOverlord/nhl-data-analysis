@@ -22,6 +22,5 @@ def main():
     artifact.add(my_table, "wpg_v_wsh_2017021065") 
     run.log_artifact(artifact) 
 
-    
 if __name__ == "__main__":
     main()
