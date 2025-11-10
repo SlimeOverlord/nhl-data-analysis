@@ -52,8 +52,7 @@ feature_sets = {
     "distance_angle": ["distance_from_goal", "angle_from_goal"]
 }
 
-# Colors used for plotting each model's curve — use Seaborn Set2 palette
-# We convert the palette to hex strings so matplotlib/wandb accept them
+# Colors used for plotting each model's curve 
 set2 = sns.color_palette("Set2", 3)
 hex_colors = [to_hex(c) for c in set2]
 colors = {
@@ -79,7 +78,7 @@ for name, features in feature_sets.items():
     X_train_scaled = scaler.fit_transform(X_train)
     X_val_scaled = scaler.transform(X_val)
 
-    # --- Initialize a W&B run for this model ---
+    # Initialize a W&B run for this model
     # We set entity/project/name/tags/config so runs are easy to find
     run = wandb.init(
         entity="IFT6758-2025-A09",
