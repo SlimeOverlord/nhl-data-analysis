@@ -13,3 +13,8 @@ jupyterlab>=3.0.0
 setuptools
 scipy
 wandb
+scikit-learn
+joblib
+optuna
+xgboost
+feature_engine
