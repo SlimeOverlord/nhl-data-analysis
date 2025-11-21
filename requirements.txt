@@ -21,3 +21,4 @@ feature_engine
 Flask
 gunicorn
 waitress
+python-dotenv
