@@ -13,7 +13,8 @@ import numpy as np
 import joblib
 import seaborn as sns
 from matplotlib.colors import to_hex
-'''
+
+"""
 This script trains three simple logistic regression baseline models
 to estimate the probability that a shot becomes a goal.
 The three feature sets are: distance only, angle only, and distance+angle.
@@ -30,7 +31,7 @@ For each feature set the script does:
 After training all runs, the script produces four diagnostic figures on
 the validation set: ROC curves, goal rate vs model percentile, cumulative
 goals vs percentile, and calibration plots.
-'''
+"""
 # 1. Load datasets and apply feature engineering
 # Load the pre-processed training and test sets (helper in project)
 training_set, test_set = load_training_and_test_sets()
@@ -49,16 +50,16 @@ y = df["is_goal"]
 feature_sets = {
     "distance": ["distance_from_goal"],
     "angle": ["angle_from_goal"],
-    "distance_angle": ["distance_from_goal", "angle_from_goal"]
+    "distance_angle": ["distance_from_goal", "angle_from_goal"],
 }
 
-# Colors used for plotting each model's curve 
+# Colors used for plotting each model's curve
 set2 = sns.color_palette("Set2", 3)
 hex_colors = [to_hex(c) for c in set2]
 colors = {
-    "distance": hex_colors[0],       # Set2[0]
-    "angle": hex_colors[1],          # Set2[1]
-    "distance_angle": hex_colors[2]  # Set2[2]
+    "distance": hex_colors[0],  # Set2[0]
+    "angle": hex_colors[1],  # Set2[1]
+    "distance_angle": hex_colors[2],  # Set2[2]
 }
 
 # 3. Train the three models and save predictions in `results`
@@ -88,12 +89,12 @@ for name, features in feature_sets.items():
         config={
             "model": "LogisticRegression",
             "features": features,
-            "random_state": 42
+            "random_state": 42,
         },
-        reinit=True  # allow multiple runs in a single script/process
+        reinit=True,  # allow multiple runs in a single script/process
     )
 
-    # Train the logistic regression model 
+    # Train the logistic regression model
     clf = LogisticRegression(max_iter=1000)
     clf.fit(X_train_scaled, y_train)
 
@@ -101,7 +102,7 @@ for name, features in feature_sets.items():
     y_proba = clf.predict_proba(X_val_scaled)[:, 1]
     results[name] = {"y_proba": y_proba, "clf": clf}
 
-    # Compute validation metrics 
+    # Compute validation metrics
     auc = roc_auc_score(y_val, y_proba)
     accuracy = accuracy_score(y_val, (y_proba > 0.5).astype(int))
 
@@ -113,20 +114,16 @@ for name, features in feature_sets.items():
     print(f"X_train shape: {X_train.shape}")
 
     # Log scalar metrics to W&B
-    wandb.log({
-        "AUC": auc,
-        "accuracy": accuracy,
-        "feature_set": name
-    })
+    wandb.log({"AUC": auc, "accuracy": accuracy, "feature_set": name})
 
-    # Create and log per-run diagnostic figures to W&B 
+    # Create and log per-run diagnostic figures to W&B
     # We log these here (while 'run' is active) so each model's run
     # stores its own ROC, calibration, goal-rate and cumulative plots.
     # 1) ROC curve (single-run)
     fpr, tpr, _ = roc_curve(y_val, y_proba)
     fig_roc = plt.figure()
     plt.plot(fpr, tpr, color=colors.get(name, "blue"), label=f"{name} (AUC={auc:.3f})")
-    plt.plot([0, 1], [0, 1], '--', color='gray')
+    plt.plot([0, 1], [0, 1], "--", color="gray")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.title(f"ROC Curve - {name}")
@@ -138,8 +135,10 @@ for name, features in feature_sets.items():
     # 2) Calibration plot (single-run) — use calibration_curve so we control colors
     fig_cal = plt.figure()
     prob_true, prob_pred = calibration_curve(y_val, y_proba, n_bins=10)
-    plt.plot(prob_pred, prob_true, marker='o', color=colors.get(name, "gray"), label=name)
-    plt.plot([0, 1], [0, 1], '--', color='gray')
+    plt.plot(
+        prob_pred, prob_true, marker="o", color=colors.get(name, "gray"), label=name
+    )
+    plt.plot([0, 1], [0, 1], "--", color="gray")
     plt.title(f"Calibration - {name}")
     plt.xlabel("Predicted probability")
     plt.ylabel("Observed frequency")
@@ -149,13 +148,19 @@ for name, features in feature_sets.items():
 
     # 3) Goal rate vs percentile (single-run)
     df_val = pd.DataFrame({"y_true": y_val, "y_proba": y_proba})
-    df_val["percentile"] = pd.qcut(df_val["y_proba"], q=20, labels=False, duplicates="drop")
+    df_val["percentile"] = pd.qcut(
+        df_val["y_proba"], q=20, labels=False, duplicates="drop"
+    )
     goal_rate = df_val.groupby("percentile")["y_true"].mean().reset_index()
     goal_rate["percentile"] = goal_rate["percentile"] * 5
     goal_rate = goal_rate.sort_values("percentile", ascending=False)
     goal_rate["goal_rate_percent"] = goal_rate["y_true"] * 100
     fig_goal = plt.figure()
-    plt.plot(goal_rate["percentile"], goal_rate["goal_rate_percent"], color=colors.get(name, "gray"))
+    plt.plot(
+        goal_rate["percentile"],
+        goal_rate["goal_rate_percent"],
+        color=colors.get(name, "gray"),
+    )
     plt.title(f"Goal Rate vs Percentile - {name}")
     plt.xlabel("Shot Probability Model Percentile")
     plt.ylabel("Goals [%]")
@@ -165,16 +170,24 @@ for name, features in feature_sets.items():
     plt.close(fig_goal)
 
     # 4) Cumulative goals (single-run)
-    df_val_sorted = df_val.sort_values("y_proba", ascending=False).reset_index(drop=True)
+    df_val_sorted = df_val.sort_values("y_proba", ascending=False).reset_index(
+        drop=True
+    )
     df_val_sorted["cum_goals"] = df_val_sorted["y_true"].cumsum()
     total_goals = df_val_sorted["y_true"].sum()
     if total_goals > 0:
         df_val_sorted["cum_goal_rate"] = df_val_sorted["cum_goals"] / total_goals * 100
     else:
         df_val_sorted["cum_goal_rate"] = 0
-    df_val_sorted["percentile"] = 100 - (np.arange(1, len(df_val_sorted) + 1) / len(df_val_sorted) * 100)
+    df_val_sorted["percentile"] = 100 - (
+        np.arange(1, len(df_val_sorted) + 1) / len(df_val_sorted) * 100
+    )
     fig_cum = plt.figure()
-    plt.plot(df_val_sorted["percentile"], df_val_sorted["cum_goal_rate"], color=colors.get(name, "gray"))
+    plt.plot(
+        df_val_sorted["percentile"],
+        df_val_sorted["cum_goal_rate"],
+        color=colors.get(name, "gray"),
+    )
     plt.gca().invert_xaxis()
     plt.title(f"Cumulative % of Goals - {name}")
     plt.xlabel("Shot Probability Model Percentile (100 → 0)")
@@ -184,18 +197,16 @@ for name, features in feature_sets.items():
     plt.close(fig_cum)
 
     # Save validation predictions to CSV and upload as an artifact
-    val_results = pd.DataFrame({
-        "y_true": y_val,
-        "y_proba": y_proba,
-        "feature_set": name
-    })
+    val_results = pd.DataFrame(
+        {"y_true": y_val, "y_proba": y_proba, "feature_set": name}
+    )
     val_csv = f"{name}_validation_predictions.csv"
     val_results.to_csv(val_csv, index=False)
 
     dataset_artifact = wandb.Artifact(
         name=f"{name}_validation_data",
         type="dataset",
-        description=f"Validation predictions for {name} feature set"
+        description=f"Validation predictions for {name} feature set",
     )
     dataset_artifact.add_file(val_csv)
     run.log_artifact(dataset_artifact)
@@ -203,6 +214,10 @@ for name, features in feature_sets.items():
     # Save model (joblib) and upload as a model artifact
     model_filename = f"{name}_model.pkl"
     joblib.dump(clf, model_filename)
+
+    # Save the scaler used for this model so it can be reused at inference
+    scaler_filename = f"{name}_scaler.pkl"
+    joblib.dump(scaler, scaler_filename)
 
     model_artifact = wandb.Artifact(
         name=f"{name}_model",
@@ -213,10 +228,12 @@ for name, features in feature_sets.items():
             "validation_auc": auc,
             "validation_accuracy": accuracy,
             "model_type": "LogisticRegression",
-            "feature_set": name
-        }
+            "feature_set": name,
+        },
     )
     model_artifact.add_file(model_filename)
+    # Also attach the scaler so the exact preprocessing is preserved
+    model_artifact.add_file(scaler_filename)
     run.log_artifact(model_artifact)
 
     # Print the run URL to easily find it later
@@ -235,7 +252,7 @@ results["random"] = {"y_proba": np.random.uniform(0, 1, size=len(y_val))}
 
 # 4. ROC curves
 roc_data = {name: data["y_proba"] for name, data in results.items() if name != "random"}
-fig_roc = plt.figure(figsize=(6,5))
+fig_roc = plt.figure(figsize=(6, 5))
 for name, data in results.items():
     y_proba = data["y_proba"]
     if name != "random":
@@ -246,7 +263,7 @@ for name, data in results.items():
         if wandb.run is not None:
             wandb.log({f"roc_curve_{name}": wandb.Image(fig_roc)})
     else:
-        plt.plot([0,1],[0,1],'--',color='gray',label="random (AUC=0.5)")
+        plt.plot([0, 1], [0, 1], "--", color="gray", label="random (AUC=0.5)")
 plt.xlabel("False Positive Rate")
 plt.ylabel("True Positive Rate")
 plt.title("ROC Curves — Logistic Regression Models")
@@ -262,14 +279,16 @@ plt.show()
 plt.close(fig_roc)
 
 
-# 5. Goal Rate vs Percentile  
-plt.figure(figsize=(7,5))
+# 5. Goal Rate vs Percentile
+plt.figure(figsize=(7, 5))
 for name, data in results.items():
     y_proba = data["y_proba"]
     # Create dataframe
     df_val = pd.DataFrame({"y_true": y_val, "y_proba": y_proba})
     # Divide into 20 percentiles
-    df_val["percentile"] = pd.qcut(df_val["y_proba"], q=20, labels=False, duplicates="drop")
+    df_val["percentile"] = pd.qcut(
+        df_val["y_proba"], q=20, labels=False, duplicates="drop"
+    )
     # Calculate average goal rate by percentile
     goal_rate = df_val.groupby("percentile")["y_true"].mean().reset_index()
     # Scale percentiles to 0–100
@@ -279,17 +298,19 @@ for name, data in results.items():
     # Calculate goal rate in percentage
     goal_rate["goal_rate_percent"] = goal_rate["y_true"] * 100
     # Plot
-    plt.plot(goal_rate["percentile"],
-             goal_rate["goal_rate_percent"],
-             color=colors.get(name, "gray"),
-             label=name)
+    plt.plot(
+        goal_rate["percentile"],
+        goal_rate["goal_rate_percent"],
+        color=colors.get(name, "gray"),
+        label=name,
+    )
 
 plt.title("Goal Rate vs Shot Probability Model Percentile (Validation Set)")
 plt.xlabel("Shot Probability Model Percentile")
 plt.ylabel("Goals / (Shots + Goals) [%]")
 plt.ylim(0, 100)
 plt.grid(True)
-plt.gca().invert_xaxis()   
+plt.gca().invert_xaxis()
 plt.legend()
 
 # Save the global goal-rate figure
@@ -301,7 +322,7 @@ print(f"Saved goal-rate figure to: {goal_path}")
 plt.show()
 
 # 6. Cumulative Goals
-plt.figure(figsize=(7,5))
+plt.figure(figsize=(7, 5))
 for name, data in results.items():
     y_proba = data["y_proba"]
     # Create DataFrame and sort by descending probability
@@ -312,13 +333,17 @@ for name, data in results.items():
     total_goals = df_val["y_true"].sum()
     df_val["cum_goal_rate"] = df_val["cum_goals"] / total_goals * 100
     # Create inverted X axis (so 100 goes on the left)
-    df_val["percentile"] = 100 - (np.arange(1, len(df_val)+1) / len(df_val) * 100)
+    df_val["percentile"] = 100 - (np.arange(1, len(df_val) + 1) / len(df_val) * 100)
     # Plot
-    plt.plot(df_val["percentile"], df_val["cum_goal_rate"],
-             color=colors.get(name, "gray"), label=name)
+    plt.plot(
+        df_val["percentile"],
+        df_val["cum_goal_rate"],
+        color=colors.get(name, "gray"),
+        label=name,
+    )
 
 plt.gca().invert_xaxis()
-plt.plot([100,0],[0,100],'--',color='gray',label="random baseline")
+plt.plot([100, 0], [0, 100], "--", color="gray", label="random baseline")
 plt.xlabel("Shot Probability Model Percentile")
 plt.ylabel("Cumulative proportion of goals [%]")
 plt.title("Cumulative % of Goals (Validation Set)")
@@ -330,17 +355,21 @@ plt.savefig(cum_path, bbox_inches="tight")
 print(f"Saved cumulative goals figure to: {cum_path}")
 plt.show()
 
-# 7. Calibration Plot 
-calib_data = {name: data["y_proba"] for name, data in results.items() if name != "random"}
-fig_global_cal = plt.figure(figsize=(6,5))
-ax = plt.gca()  #create a single axis for all plots
+# 7. Calibration Plot
+calib_data = {
+    name: data["y_proba"] for name, data in results.items() if name != "random"
+}
+fig_global_cal = plt.figure(figsize=(6, 5))
+ax = plt.gca()  # create a single axis for all plots
 for name, data in results.items():
     if name != "random":
         prob_true, prob_pred = calibration_curve(y_val, data["y_proba"], n_bins=10)
-        plt.plot(prob_pred, prob_true, marker='o', color=colors.get(name, "gray"), label=name)
+        plt.plot(
+            prob_pred, prob_true, marker="o", color=colors.get(name, "gray"), label=name
+        )
 
 # Reference line for perfect calibration
-plt.plot([0,1],[0,1],'--',color='gray',label="Perfect calibration")
+plt.plot([0, 1], [0, 1], "--", color="gray", label="Perfect calibration")
 
 plt.title("Calibration Plot — Logistic Regression Models")
 plt.xlabel("Predicted probability")
