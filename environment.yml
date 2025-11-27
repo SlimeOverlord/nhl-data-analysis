@@ -1,8 +1,8 @@
-name: proyecto-data-science
+name: ift6758-conda-env
 channels:
   - conda-forge
 dependencies:
-  - python>=3.10
+  - python>=3.6
   - numpy
   - pandas
   - matplotlib
@@ -18,7 +18,3 @@ dependencies:
   - jupyterlab>=3.0.0
   - ipdb
   - scipy
-  - pip
-  - pip:
-      - wandb
-      - xgboost>=1.7.6

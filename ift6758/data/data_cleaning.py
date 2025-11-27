@@ -194,6 +194,7 @@ def clean_play_by_play_data(game_data: Dict) -> pd.DataFrame:
     }
 
     for play in plays:
+        event_id = play.get('eventId')
         event_type = play.get('typeDescKey', '').lower()
         period_time = play.get('timeInPeriod', '00:00')
         period_info = play.get('periodDescriptor', {})  
@@ -244,6 +245,7 @@ def clean_play_by_play_data(game_data: Dict) -> pd.DataFrame:
         strength = determine_game_strength(play, situation_code)
 
         event_record = {
+            'event_id' : event_id,
             'game_id': game_id,
             'period': period,
             'period_time': period_time,
