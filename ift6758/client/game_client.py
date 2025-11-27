@@ -25,30 +25,33 @@ class GameClient:
         # Only keep the new events 
         new_events = cleaned_df[~cleaned_df['event_id'].isin(self.seen_event_ids)]
 
+        # Initialize a list to keep track of the predictions
         predictions_list = []
         
         for _, event_row in new_events.iterrows():
             #obtain the features for each event
+            # the conversion to dict is needed because feature_engineering_1 expects a dict 
             features = feature_engineering_1(pd.DataFrame([event_row])).iloc[0].to_dict()
-            # get the prediction calling the service_client (the features have to be a dataframe because predict in serving_client expects a dataframe)
+            # Get the prediction calling the service_client (the features have to be a dataframe because predict in serving_client expects a dataframe)
             prediction = self.service_client.predict(pd.DataFrame([features]))
+            # Add each prediction to the list
             predictions_list.append(prediction)
             self.seen_event_ids.add(event_row['event_id'])
-        
+
         if predictions_list:
             all_predictions = pd.concat(predictions_list, ignore_index=True)
             return all_predictions
         else:
             return pd.DataFrame()
-
+        
 
 # To check it is working
 if __name__ == "__main__":
     serving_client = ServingClient(ip="localhost", port=8000) 
     game_id = 2023020410  
     client = GameClient(game_id, serving_client)
-    client.fetch_events()
-
+    predictions = client.fetch_events()
+    print(predictions)
 
 
 

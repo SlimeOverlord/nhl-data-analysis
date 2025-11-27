@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class ServingClient:
-    def __init__(self, ip: str = "0.0.0.0", port: int =000, features=None):
+    def __init__(self, ip: str = "0.0.0.0", port: int =8000, features=None):
         self.base_url = f"http://{ip}:{port}"
         logger.info(f"Initializing client; base URL: {self.base_url}")
 
@@ -17,7 +17,6 @@ class ServingClient:
         #self.features = features
 
         # any other potential initialization
-        
 
     def predict(self, X: pd.DataFrame) -> pd.DataFrame:
         """
