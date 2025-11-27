@@ -3,8 +3,7 @@ import requests
 import pandas as pd
 import logging
 from ift6758.data.data_cleaning import *
-from ift6758.client.serving_client import ServingClient  # Ajusta el import según tu estructura
-
+from ift6758.client.serving_client import ServingClient  
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,6 @@ class GameClient:
         self.seen_event_ids = set()
 
     def fetch_events(self):
-        features = []
         # Download all events for the given game_id as a Python dictionary
         url_to_get_events = f"https://api-web.nhle.com/v1/gamecenter/{self.game_id}/play-by-play"
         response = requests.get(url_to_get_events)
@@ -27,14 +25,21 @@ class GameClient:
         # Only keep the new events 
         new_events = cleaned_df[~cleaned_df['event_id'].isin(self.seen_event_ids)]
 
+        predictions_list = []
+        
         for _, event_row in new_events.iterrows():
             #obtain the features for each event
             features = feature_engineering_1(pd.DataFrame([event_row])).iloc[0].to_dict()
-            # get the prediction calling the service_client (it has to be a dataframe because predict in serving_client expects a dataframe)
+            # get the prediction calling the service_client (the features have to be a dataframe because predict in serving_client expects a dataframe)
             prediction = self.service_client.predict(pd.DataFrame([features]))
+            predictions_list.append(prediction)
             self.seen_event_ids.add(event_row['event_id'])
-            # This line was to check everything was running fine
-            print(prediction)
+        
+        if predictions_list:
+            all_predictions = pd.concat(predictions_list, ignore_index=True)
+            return all_predictions
+        else:
+            return pd.DataFrame()
 
 
 # To check it is working
