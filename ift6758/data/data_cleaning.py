@@ -171,9 +171,11 @@ def clean_play_by_play_data(game_data: Dict) -> pd.DataFrame:
 
     away_team = game_data.get("awayTeam", {})
     away_team_id = away_team.get("id")
+    away_team_name = away_team.get("commonName", {}).get("default")
 
     home_team = game_data.get("homeTeam", {})
     home_team_id = home_team.get("id")
+    home_team_name = home_team.get("commonName", {}).get("default")
 
     # Handle both old API format (plays.allPlays) and new format (plays as list)
     plays_data = game_data.get('plays', [])
@@ -250,6 +252,7 @@ def clean_play_by_play_data(game_data: Dict) -> pd.DataFrame:
             'period': period,
             'period_time': period_time,
             'team': team_abbrev if team_abbrev else team_id,
+            'team_name': away_team_name if team_id == away_team_id else home_team_name,
             'event_type': 'Goal' if is_goal else 'Shot',
             'x_coord': x,
             'y_coord': y,

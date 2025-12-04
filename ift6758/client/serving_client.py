@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class ServingClient:
     def __init__(self, ip: str = "0.0.0.0", port: int =8000, features=None):
         self.base_url = f"http://{ip}:{port}"
+        self.session = requests.Session()
         logger.info(f"Initializing client; base URL: {self.base_url}")
 
         #if features is None:
@@ -30,7 +31,7 @@ class ServingClient:
 
         predictions = []
         for idx, row in X.iterrows():
-            response = requests.post(f"{self.base_url}/predict", json=json.loads(row.to_json()))
+            response = self.session.post(f"{self.base_url}/predict", json=json.loads(row.to_json()))
             prob = response.json()['probability']
             predictions.append(prob)
         
@@ -40,7 +41,7 @@ class ServingClient:
 
     def logs(self) -> dict:
         """Get server logs"""
-        response = requests.get(f"{self.base_url}/logs")
+        response = self.session.get(f"{self.base_url}/logs")
         return response.json()
 
 
@@ -59,7 +60,7 @@ class ServingClient:
             model (str): The model in the Comet ML registry to download
             version (str): The model version to download
         """
-        response = requests.post(f"{self.base_url}/download_registry_model", json={"name": model})
+        response = self.session.post(f"{self.base_url}/download_registry_model", json={"name": model})
         return response.json()
 
 
