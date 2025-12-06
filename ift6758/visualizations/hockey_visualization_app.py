@@ -4,6 +4,8 @@ import os
 import shutil
 import numpy as np
 import requests
+import plotly.graph_objects as go
+import plotly.express as px
 from datetime import timedelta
 from ift6758.client.serving_client import ServingClient
 from ift6758.client.game_client import GameClient
@@ -15,9 +17,11 @@ if "old_cache_deleted" not in st.session_state:
     os.makedirs("app_cache", exist_ok=True)
     st.session_state.old_cache_deleted = True
 
-# Creating the serving client that will communicate with the Flask app
+# Use environment variable for Docker, fallback to localhost for local dev
+SERVING_HOST = os.environ.get("SERVING_HOST", "127.0.0.1")
+
 if "serving_client" not in st.session_state:
-    st.session_state.serving_client = ServingClient(ip="127.0.0.1", port=5000)
+    st.session_state.serving_client = ServingClient(ip=SERVING_HOST, port=5000)
 
 # Creating the game client dictionary. The clients are indexed by game ID and model, allowing to make predictions with different models for a same game ID
 if "game_clients" not in st.session_state:
@@ -81,6 +85,147 @@ def features_for_app(data: pd.DataFrame):
     
     return features
 
+
+# BONUS FEATURE: Shot location visualization on hockey rink
+def create_shot_location_chart(data: pd.DataFrame, team_names: list):
+    """
+    Creates a scatter plot showing shot locations on the hockey rink.
+    Goals are shown as stars, shots as circles. Size represents xG probability.
+    """
+    if data.empty or 'standardized_x_coord' not in data.columns:
+        return None
+    
+    # Filter out rows with missing coordinates
+    plot_data = data.dropna(subset=['standardized_x_coord', 'standardized_y_coord'])
+    if plot_data.empty:
+        return None
+    
+    fig = go.Figure()
+    
+    # Draw simplified rink outline
+    # Center line
+    fig.add_shape(type="line", x0=0, y0=-42.5, x1=0, y1=42.5,
+                  line=dict(color="red", width=2))
+    # Blue lines
+    fig.add_shape(type="line", x0=-25, y0=-42.5, x1=-25, y1=42.5,
+                  line=dict(color="blue", width=2))
+    fig.add_shape(type="line", x0=25, y0=-42.5, x1=25, y1=42.5,
+                  line=dict(color="blue", width=2))
+    # Goal lines
+    fig.add_shape(type="line", x0=-89, y0=-42.5, x1=-89, y1=42.5,
+                  line=dict(color="red", width=1))
+    fig.add_shape(type="line", x0=89, y0=-42.5, x1=89, y1=42.5,
+                  line=dict(color="red", width=1))
+    # Rink outline
+    fig.add_shape(type="rect", x0=-100, y0=-42.5, x1=100, y1=42.5,
+                  line=dict(color="black", width=2))
+    
+    colors = px.colors.qualitative.Set1
+    
+    for i, team in enumerate(team_names):
+        team_data = plot_data[plot_data['team_name'] == team]
+        if team_data.empty:
+            continue
+        
+        # Shots (non-goals)
+        shots = team_data[team_data['is_goal'] == 0]
+        if not shots.empty:
+            fig.add_trace(go.Scatter(
+                x=shots['standardized_x_coord'],
+                y=shots['standardized_y_coord'],
+                mode='markers',
+                marker=dict(
+                    size=shots['prediction'] * 30 + 5,
+                    color=colors[i % len(colors)],
+                    opacity=0.6,
+                    symbol='circle'
+                ),
+                name=f"{team} Shots",
+                hovertemplate=f"{team}<br>xG: %{{customdata:.3f}}<extra></extra>",
+                customdata=shots['prediction']
+            ))
+        
+        # Goals
+        goals = team_data[team_data['is_goal'] == 1]
+        if not goals.empty:
+            fig.add_trace(go.Scatter(
+                x=goals['standardized_x_coord'],
+                y=goals['standardized_y_coord'],
+                mode='markers',
+                marker=dict(
+                    size=15,
+                    color=colors[i % len(colors)],
+                    symbol='star',
+                    line=dict(width=2, color='black')
+                ),
+                name=f"{team} Goals",
+                hovertemplate=f"{team} GOAL<br>xG: %{{customdata:.3f}}<extra></extra>",
+                customdata=goals['prediction']
+            ))
+    
+    fig.update_layout(
+        title="Shot Locations (size = xG, stars = goals)",
+        xaxis=dict(range=[-100, 100], title="", showgrid=False, zeroline=False),
+        yaxis=dict(range=[-45, 45], title="", showgrid=False, zeroline=False, scaleanchor="x"),
+        height=400,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    
+    return fig
+
+
+# BONUS FEATURE: Cumulative xG chart over time
+def create_cumulative_xg_chart(data: pd.DataFrame, team_names: list):
+    """
+    Creates a line chart showing cumulative xG over time for each team.
+    """
+    if data.empty or 'prediction' not in data.columns:
+        return None
+    
+    fig = go.Figure()
+    colors = px.colors.qualitative.Set1
+    
+    for i, team in enumerate(team_names):
+        team_data = data[data['team_name'] == team].copy()
+        if team_data.empty:
+            continue
+        
+        team_data = team_data.reset_index(drop=True)
+        team_data['cumulative_xG'] = team_data['prediction'].cumsum()
+        team_data['cumulative_goals'] = team_data['is_goal'].cumsum()
+        team_data['event_num'] = range(1, len(team_data) + 1)
+        
+        # Cumulative xG line
+        fig.add_trace(go.Scatter(
+            x=team_data['event_num'],
+            y=team_data['cumulative_xG'],
+            mode='lines',
+            name=f"{team} xG",
+            line=dict(color=colors[i % len(colors)], width=2)
+        ))
+        
+        # Cumulative goals line (stepped)
+        fig.add_trace(go.Scatter(
+            x=team_data['event_num'],
+            y=team_data['cumulative_goals'],
+            mode='lines',
+            name=f"{team} Goals",
+            line=dict(color=colors[i % len(colors)], width=2, dash='dot')
+        ))
+    
+    fig.update_layout(
+        title="Cumulative xG vs Actual Goals",
+        xaxis_title="Shot Number",
+        yaxis_title="Cumulative Value",
+        height=350,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    
+    return fig
+
+
 st.title("Hockey Visualization App")
 
 # The sidebar containing all the options for loading the model from WandB
@@ -95,9 +240,9 @@ if st.sidebar.button("Get Model"):
         # Calling the serving client to "swap models" with the specified model
         response = st.session_state.serving_client.download_registry_model(workspace, model_name, version)
         if "error" in response:
-            st.sidebar.error(f"Error loading the model: {response["error"]}")
+            st.sidebar.error(f"Error loading the model: {response['error']}")
         else:
-            st.sidebar.write(f"Model {response["selected"]} loaded successfully!")
+            st.sidebar.write(f"Model {response['selected']} loaded successfully!")
     except Exception as e:
         st.sidebar.write(f"An exception occurred while loading the model: {e}")
 
@@ -134,8 +279,8 @@ if st.button("Ping game"):
         # Getting only the unseen cleaned data, extracting the important features and fusing it with the data returned by the game client
         cleaned_df = clean_play_by_play_data(all_data)
         new_data_df = cleaned_df.loc[len(seen_data):]
-        new_data_df = new_data_df[["period", "period_time", "team_name"]]
-        new_data_df = pd.concat([new_data_df, new_data], axis=1)
+        new_data_df = new_data_df[["period", "period_time", "team_name", "standardized_x_coord", "standardized_y_coord", "event_type"]]
+        new_data_df = pd.concat([new_data_df.reset_index(drop=True), new_data.reset_index(drop=True)], axis=1)
 
         # Saving the newly obtained data to the cache's corresponding CSV file
         add_to_cache(game_id, model_name, new_data_df)
@@ -143,24 +288,68 @@ if st.button("Ping game"):
         # Fusing the already seen and new data to compute the features for the display
         complete_data_df = pd.concat([seen_data, new_data_df], axis=0)
 
+        # Store complete data in session state for bonus visualizations
+        st.session_state.complete_data = complete_data_df
+
         # Obtaining the features for the display 
         features = features_for_app(complete_data_df)
 
+        # Store features in session state
+        st.session_state.features = features
+
         # Updating the display with the obtained features
-        st.header(f"Game {game_id}: {features["team1_name"]} vs {features["team2_name"]}")
+        st.header(f"Game {game_id}: {features['team1_name']} vs {features['team2_name']}")
         st.write("")
-        st.write(f"Period {features["period"]} - {features["remaining_time"]} left")
+        st.write(f"Period {features['period']} - {features['remaining_time']} left")
         st.write("")
 
         team1_col, team2_col = st.columns(2)
         with team1_col:
-            st.metric(f"{features["team1_name"]} xG (actual)", f"{features["team1_xG"]} ({features["team1_score"]})", f"{round(features["team1_score"] - features["team1_xG"], 1)}")
+            st.metric(f"{features['team1_name']} xG (actual)", f"{features['team1_xG']} ({features['team1_score']})", f"{round(features['team1_score'] - features['team1_xG'], 1)}")
 
         with team2_col:
-            st.metric(f"{features["team2_name"]} xG (actual)", f"{features["team2_xG"]} ({features["team2_score"]})", f"{round(features["team2_score"] - features["team2_xG"], 1)}")
+            st.metric(f"{features['team2_name']} xG (actual)", f"{features['team2_xG']} ({features['team2_score']})", f"{round(features['team2_score'] - features['team2_xG'], 1)}")
 
         st.header("Data used for predictions (and predictions)")
-        st.write(complete_data_df.iloc[:, 3:])
+        st.write(complete_data_df)
+
+        # BONUS: Display visualizations
+        st.divider()
+        st.header("Bonus: Interactive Visualizations")
+        
+        team_names = [features['team1_name'], features['team2_name']]
+        
+        # Shot location chart
+        shot_chart = create_shot_location_chart(complete_data_df, team_names)
+        if shot_chart:
+            st.plotly_chart(shot_chart, use_container_width=True)
+        
+        # Cumulative xG chart
+        xg_chart = create_cumulative_xg_chart(complete_data_df, team_names)
+        if xg_chart:
+            st.plotly_chart(xg_chart, use_container_width=True)
 
     except Exception as e:
         st.write(f"An exception occurred while pinging the server: {e}")
+
+# BONUS SECTION DESCRIPTION
+st.divider()
+st.subheader("Bonus Feature Description")
+st.write("""
+**Added Features:**
+
+1. **Shot Location Visualization**: An interactive scatter plot showing all shots on a simplified hockey rink diagram. 
+   - Shot locations are displayed with circle markers where the size represents the xG probability
+   - Goals are highlighted with star markers
+   - Each team has a distinct color for easy comparison
+   - Hover over any marker to see the exact xG value
+
+2. **Cumulative xG Chart**: A line chart tracking the progression of expected goals throughout the game.
+   - Solid lines show cumulative xG for each team
+   - Dotted lines show actual goals scored
+   - This visualization helps identify if a team is over/under-performing relative to their shot quality
+
+These visualizations provide deeper insights into game flow and shot quality beyond the basic xG statistics,
+allowing viewers to understand not just how many chances each team created, but where those chances came from
+and how the game momentum shifted over time.
+""")

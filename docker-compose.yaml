@@ -12,3 +12,15 @@ services:
       - WANDB_API_KEY=${WANDB_API_KEY}
 
 
+  streamlit:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.streamlit
+    image: ift6758-streamlit
+    ports:
+      - "8501:8501"
+    depends_on:
+      - serving
+    environment:
+      - SERVING_HOST=serving
+      - SERVING_PORT=5000
