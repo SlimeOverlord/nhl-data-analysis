@@ -7,7 +7,7 @@ services:
       dockerfile: ./Dockerfile.serving
     image: ift6758-serving
     ports:
-      - "5050:5000"
+      - "5000:5000"
     environment:
       - WANDB_API_KEY=${WANDB_API_KEY}
 
