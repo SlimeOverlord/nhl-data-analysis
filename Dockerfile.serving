@@ -1,0 +1,25 @@
+# Base Python image
+FROM python:3.10
+
+# Set working directory
+WORKDIR /code
+
+ADD requirements.txt .
+
+# Install dependencies
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Copy Flask server code
+ADD server/ ./server/
+
+# Copy local Python package
+ADD ift6758/ ./ift6758/
+ADD setup.py .
+# Install the ift6758 package in editable mode
+RUN pip install -e .
+
+# Expose port
+EXPOSE 5000
+
+# Default command to run the Flask app
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "server.app:app"]

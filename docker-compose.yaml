@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  serving:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.serving
+    image: ift6758-serving
+    ports:
+      - "5050:5000"
+    environment:
+      - WANDB_API_KEY=${WANDB_API_KEY}
+
