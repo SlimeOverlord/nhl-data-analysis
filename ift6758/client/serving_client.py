@@ -30,6 +30,7 @@ class ServingClient:
         """
 
         predictions = []
+        
         for idx, row in X.iterrows():
             response = self.session.post(f"{self.base_url}/predict", json=json.loads(row.to_json()))
             prob = response.json()['probability']
