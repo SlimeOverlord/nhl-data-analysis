@@ -1,0 +1,24 @@
+# Base Python image
+FROM python:3.10
+
+# Set working directory
+WORKDIR /code
+
+# Copy requirements
+ADD requirements.txt .
+
+# Install dependencies
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Copy local Python package
+ADD ift6758/ ./ift6758/
+ADD setup.py .
+
+# Install the ift6758 package in editable mode
+RUN pip install -e .
+
+# Expose Streamlit port
+EXPOSE 8501
+
+# Default command to run Streamlit
+CMD ["streamlit", "run", "ift6758/visualizations/hockey_visualization_app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
