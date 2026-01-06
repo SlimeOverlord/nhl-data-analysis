@@ -81,8 +81,8 @@ To see the rest of our experiments, you are free to run the rest of the notebook
 
 - `features`: All our feature engineering experiments
 - `models`: The models we built and used for goal prediction
-- `visualizations`: Our visual explorations of the data. **NOTE:** the `rink_plot_widget` file is not supposed to be executed, and is used in the game_event_explorer.ipynb notebook. Also, the `hockey_visualization_app.py` file has to be run using the command 
+- `visualizations`: Our visual explorations of the data. **NOTE:** the `rink_plot_widget` file is not supposed to be executed, and is used in the game_event_explorer.ipynb notebook. Also, the `hockey_visualization_app.py` file has to be run using the command
 
-    streamlit run hockey_visualization_app.py
+        streamlit run hockey_visualization_app.py
 
 
