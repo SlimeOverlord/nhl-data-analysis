@@ -79,8 +79,10 @@ Before everything, the first 2 things you should run are the `data_cleaning_demo
 ### Demos and visualizations
 To see the rest of our experiments, you are free to run the rest of the notebooks found in the `notebooks` folder, as well as the files and notebooks in the following sections:
 
--`features`: All our feature engineering experiments
--`models`: The models we built and used for goal prediction
--`visualizations`: Our visual explorations of the data. **NOTE:** the `rink_plot_widget` file is not supposed to be executed, and is used in the game_event_explorer.ipynb notebook.
+- `features`: All our feature engineering experiments
+- `models`: The models we built and used for goal prediction
+- `visualizations`: Our visual explorations of the data. **NOTE:** the `rink_plot_widget` file is not supposed to be executed, and is used in the game_event_explorer.ipynb notebook. Also, the `hockey_visualization_app.py` file has to be run using the command 
+
+    streamlit run hockey_visualization_app.py
 
 
