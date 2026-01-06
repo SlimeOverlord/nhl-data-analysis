@@ -93,10 +93,10 @@ You can use the Goal Prediction Streamlit application from your machine using Do
 2. Open a terminal to the root of the project on your machine
 3. Run the command
 
-    docker compose build
+        streamlit run hockey_visualization_app.py
 4. Run the command
 
-    docker compose up
+        streamlit run hockey_visualization_app.py
 
 The Streamlit app should now be running on your localhost. To close everything, run the command
 
