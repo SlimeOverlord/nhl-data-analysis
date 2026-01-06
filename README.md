@@ -86,3 +86,18 @@ To see the rest of our experiments, you are free to run the rest of the notebook
         streamlit run hockey_visualization_app.py
 
 
+### Goal Prediction Application (With Docker)
+You can use the Goal Prediction Streamlit application from your machine using Docker Desktop by following these steps:
+
+1. Start Docker Desktop
+2. Open a terminal to the root of the project on your machine
+3. Run the command
+
+    docker compose build
+4. Run the command
+
+    docker compose up
+
+The Streamlit app should now be running on your localhost. To close everything, run the command
+
+    docker compose down
