@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  serving:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.serving
+    image: ift6758-serving
+    ports:
+      - "5000:5000"
+    environment:
+      - WANDB_API_KEY=${WANDB_API_KEY}
+
+
+  streamlit:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile.streamlit
+    image: ift6758-streamlit
+    ports:
+      - "8501:8501"
+    depends_on:
+      - serving
+    environment:
+      - SERVING_HOST=serving
+      - SERVING_PORT=5000

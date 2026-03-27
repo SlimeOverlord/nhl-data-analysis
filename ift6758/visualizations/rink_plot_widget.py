@@ -1,3 +1,4 @@
+#%%
 import sys
 sys.path.append('../..')
 from ift6758.data.data_fetching import SeasonData
@@ -51,6 +52,7 @@ def get_rink_path():
     while project_root.name != "nhl-data-analysis" and project_root.parent != project_root:
         project_root = project_root.parent
     return project_root / "figures" / "nhl_rink.png"
+
 
 def plot_event_on_rink(play, rink_path=get_rink_path()):
     """
@@ -197,3 +199,6 @@ def interactive_explorer(year=2017, season_type="reg"):
     # Initialize the output
     update_output(games, game_slider, event_slider, out)
 
+#%%
+interactive_explorer(2017, "reg")
+# %%

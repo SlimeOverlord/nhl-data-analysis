@@ -32,7 +32,7 @@ class SeasonData:
             with open(filename_reg, 'r') as file:
                 for line in file:
                     game_data = json.loads(line)
-                    self.reg_season_data[f"{game_data["id"]}"] = game_data
+                    self.reg_season_data[f"{game_data['id']}"] = game_data
         
         # If no, we call the api to get the data for each game and save it into a file
         else:
@@ -45,7 +45,7 @@ class SeasonData:
                 # If the api finds the game, save it in the dict and write it to the file
                 if api_response.status_code == 200:
                     api_response_json = api_response.json()
-                    self.reg_season_data[f"{api_response_json["id"]}"] = api_response_json
+                    self.reg_season_data[f"{api_response_json['id']}"] = api_response_json
 
                     with open(filename_reg, 'a') as file:
                         file.write(json.dumps(api_response_json) + "\n")
@@ -59,7 +59,7 @@ class SeasonData:
             with open(filename_playoffs, 'r') as file:
                 for line in file:
                     game_data = json.loads(line)
-                    self.playoffs_data[f"{game_data["id"]}"] = game_data
+                    self.playoffs_data[f"{game_data['id']}"] = game_data
 
         # If no, we call the api to get the data for each game and save it into a file
         else:
@@ -77,7 +77,7 @@ class SeasonData:
                         # If the api finds the game, save it in the dict and write it to the file
                         if api_response.status_code == 200:
                             api_response_json = api_response.json()
-                            self.playoffs_data[f"{api_response_json["id"]}"] = api_response_json
+                            self.playoffs_data[f"{api_response_json['id']}"] = api_response_json
                             with open(filename_playoffs, 'a') as file:
                                 file.write(json.dumps(api_response_json) + "\n")
 

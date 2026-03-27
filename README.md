@@ -1,44 +1,5 @@
-# IFT6758 Repo Template
-
-This template provides you with a skeleton of a Python package that can be installed into your local machine.
-This allows you access your code from anywhere on your system if you've activated the environment the package was installed to.
-You are encouraged to leverage this package as a skeleton and add all of your reusable code, functions, etc. into relevant modules.
-This makes collaboration much easier as the package could be seen as a "single source of truth" to pull data, create visualizations, etc. rather than relying on a jumble of notebooks.
-You can still run into trouble if branches are not frequently merged as work progresses, so try to not let your branches diverge too much!
-
-Also included in this repo is an image of the NHL ice rink that you can use in your plots.
-It has the correct location of lines, faceoff dots, and length/width ratio as the real NHL rink.
-Note that the rink is 200 feet long and 85 feet wide, with the goal line 11 feet from the nearest edge of the rink, and the blue line 75 feet from the nearest edge of the rink.
-
-<p align="center">
-<img src="./figures/nhl_rink.png" alt="NHL Rink is 200ft x 85ft." width="400"/>
-<p>
-
-The image can be found in [`./figures/nhl_rink.png`](./figures/nhl_rink.png).
-
-## Installation
-
-To install this package, first setup your Python environment by following the instructions in the [Environment](#environments) section.
-Once you've setup your environment, you can install this package by running the following command from the root directory of your repository. 
-
-    pip install -e .
-
-You should see something similar to the following output:
-
-    > pip install -e .
-    Obtaining file:///home/USER/project-template
-    Installing collected packages: ift6758
-    Running setup.py develop for ift6758
-    Successfully installed ift6758-0.1.0
-
-
 ## Environments
-
-The first thing you should setup is your isolated Python environment.
-You can manage your environments through either Conda or pip.
-Both ways are valid, just make sure you understand the method you choose for your system.
-It's best if everyone on your team agrees on the same method, or you will have to maintain both environment files!
-Instructions are provided for both methods.
+First, you should setup your virtual environment. The instructions for setup using Conda and Pip are detailed below. 
 
 **Note**: If you are having trouble rendering interactive plotly figures and you're using the pip + virtualenv method, try using Conda instead.
 
@@ -98,4 +59,51 @@ If you want to create a new `requirements.txt` file, you can use `pip freeze`:
     pip freeze > requirements.txt
 
 
+## Installation
+Once you've setup your environment, you can install this package by running the following command from the root directory of your repository. 
 
+    pip install -e .
+
+You should see something similar to the following output:
+
+    > pip install -e .
+    Obtaining file:///home/USER/project-template
+    Installing collected packages: ift6758
+    Running setup.py develop for ift6758
+    Successfully installed ift6758-0.1.0
+
+
+## How To Run
+Before everything, the first 2 things you should run are the `data_cleaning_demo.ipynb` and `get_train_and_test_sets_demo.ipynb` notebooks, which can be found under the `notebooks` folder, and in this order specifically. These may take a while to run, but they will give all the data needed to run the rest of the experiments and cache it, so access will be much faster.
+
+### Demos and visualizations
+To see the rest of our experiments, you are free to run the rest of the notebooks found in the `notebooks` folder, as well as the files and notebooks in the following sections:
+
+- `features`: All our feature engineering experiments
+- `models`: The models we built and used for goal prediction
+- `visualizations`: Our visual explorations of the data. **NOTE:** the `rink_plot_widget` file is not supposed to be executed, and is used in the game_event_explorer.ipynb notebook. Also, the `hockey_visualization_app.py` file has to be run using the command
+
+        streamlit run hockey_visualization_app.py
+
+
+### Goal Prediction Application (With Docker)
+You can use the Goal Prediction Streamlit application from your machine using Docker Desktop by following these steps:
+
+1. Start Docker Desktop
+2. Open a terminal to the root of the project on your machine
+3. Build the containers using the command
+
+        docker compose build
+4. Run the program using the command
+
+        docker compose up
+
+The Streamlit app should now be running on your localhost. To close everything, run the command
+
+    docker compose down
+
+**NOTE:** Once those steps have been followed for the first time, you don't need to rebuild the containers. You can simply start the program by running
+
+    docker compose up
+
+from your project root once Docker Desktop is running
